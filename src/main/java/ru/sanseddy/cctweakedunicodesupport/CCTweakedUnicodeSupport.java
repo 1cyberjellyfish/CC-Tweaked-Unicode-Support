@@ -29,13 +29,12 @@ public class CCTweakedUnicodeSupport {
             var cyrillicLetter = LuaString.valueOf(new byte[]{(byte) 0xD0, (byte) 0xAF});
             var actual = OperationHelper.length(new LuaState(), cyrillicLetter).checkInteger();
             if (actual != 1) {
-                throw new IllegalStateException("Cobalt's # operator counts UTF-8 bytes (expected 1, got " + actual + ")");
+                LOGGER.warn("Cobalt's # operator counts UTF-8 bytes (expected 1, got {}). Falling back to runtime unicode helpers.", actual);
+                return;
             }
             LOGGER.info("Unicode-aware Lua # operator enabled");
-        } catch (RuntimeException | Error failure) {
-            throw failure;
         } catch (Throwable failure) {
-            throw new IllegalStateException("Could not verify Cobalt's Unicode length operator", failure);
+            LOGGER.warn("Could not verify Cobalt's Unicode length operator ({}). Continuing with standard Lua runtime.", failure.getMessage());
         }
     }
 
@@ -45,9 +44,12 @@ public class CCTweakedUnicodeSupport {
             context.enqueueWork(() -> {
                 if (!payload.isValid()) return;
                 var player = context.player();
-                if (player.containerMenu.containerId == payload.containerId()
-                    && player.containerMenu instanceof ComputerMenu menu) {
-                    menu.getComputer().queueEvent("char", new Object[]{Utf8.encodePreferLegacy(payload.codepoint())});
+                if (player.containerMenu.containerId == payload.containerId()) {
+                    if (player.containerMenu instanceof ComputerMenu menu) {
+                        menu.getComputer().queueEvent("char", new Object[]{Utf8.encodePreferLegacy(payload.codepoint())});
+                    } else {
+                        ru.sanseddy.cctweakedunicodesupport.compat.CCTerminalsCompat.tryHandleChar(player.containerMenu, payload.codepoint());
+                    }
                 }
             })
         );

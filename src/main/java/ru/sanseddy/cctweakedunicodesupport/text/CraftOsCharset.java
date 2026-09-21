@@ -14,11 +14,23 @@ public final class CraftOsCharset {
 
     public static final char CONTINUATION = '\uFDEF';
 
+    public static final char ASTRAL_ALIAS_BASE = '\uE000';
+
+    public static final int MAX_ASTRAL_ALIASES = 2048;
+
     private static final int[] TO_CODEPOINT = new int[SIZE];
 
     private static final char[] TO_CELL = new char[SIZE];
 
     private static final int[] ALIAS_TO_BYTE = new int[LEGACY_ALIAS_END - LEGACY_ALIAS_BASE + 1];
+
+    private static final int[] ASTRAL_TO_CODEPOINT = new int[MAX_ASTRAL_ALIASES];
+
+    private static final java.util.Map<Integer, Character> CODEPOINT_TO_ASTRAL = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final java.util.concurrent.atomic.AtomicInteger ASTRAL_COUNT = new java.util.concurrent.atomic.AtomicInteger(0);
+
+    private static final java.nio.file.Path PERSISTENCE_PATH = java.nio.file.Paths.get("config", "cc_tweaked_unicode_astral.dat");
 
     static {
         Arrays.fill(TO_CODEPOINT, -1);
@@ -40,6 +52,45 @@ public final class CraftOsCharset {
             }
         }
         if (alias != ALIAS_TO_BYTE.length) throw new IllegalStateException("Unexpected terminal alias count");
+
+        loadPersistedAstralAliases();
+    }
+
+    private static void loadPersistedAstralAliases() {
+        try {
+            if (!java.nio.file.Files.exists(PERSISTENCE_PATH)) return;
+            try (var in = new java.io.DataInputStream(new java.io.BufferedInputStream(java.nio.file.Files.newInputStream(PERSISTENCE_PATH)))) {
+                int maxIdx = -1;
+                while (in.available() > 0) {
+                    int idx = in.readInt();
+                    int codepoint = in.readInt();
+                    if (idx >= 0 && idx < MAX_ASTRAL_ALIASES) {
+                        ASTRAL_TO_CODEPOINT[idx] = codepoint;
+                        CODEPOINT_TO_ASTRAL.put(codepoint, (char) (ASTRAL_ALIAS_BASE + idx));
+                        if (idx > maxIdx) maxIdx = idx;
+                    }
+                }
+                if (maxIdx >= 0) {
+                    ASTRAL_COUNT.set(maxIdx + 1);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void appendPersistedAstralAlias(int idx, int codepoint) {
+        try {
+            var parent = PERSISTENCE_PATH.getParent();
+            if (parent != null) {
+                java.nio.file.Files.createDirectories(parent);
+            }
+            try (var out = new java.io.DataOutputStream(new java.io.BufferedOutputStream(
+                java.nio.file.Files.newOutputStream(PERSISTENCE_PATH, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)))) {
+                out.writeInt(idx);
+                out.writeInt(codepoint);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private CraftOsCharset() {
@@ -72,8 +123,44 @@ public final class CraftOsCharset {
         return toLegacyByte(codepoint) >= 0;
     }
 
+    public static char toAstralCell(int codepoint) {
+        Character cached = CODEPOINT_TO_ASTRAL.get(codepoint);
+        if (cached != null) return cached;
+        synchronized (ASTRAL_TO_CODEPOINT) {
+            cached = CODEPOINT_TO_ASTRAL.get(codepoint);
+            if (cached != null) return cached;
+            int idx = ASTRAL_COUNT.getAndIncrement() % MAX_ASTRAL_ALIASES;
+            int oldCodepoint = ASTRAL_TO_CODEPOINT[idx];
+            if (oldCodepoint > 0) {
+                CODEPOINT_TO_ASTRAL.remove(oldCodepoint);
+            }
+            char cell = (char) (ASTRAL_ALIAS_BASE + idx);
+            ASTRAL_TO_CODEPOINT[idx] = codepoint;
+            CODEPOINT_TO_ASTRAL.put(codepoint, cell);
+            appendPersistedAstralAlias(idx, codepoint);
+            return cell;
+        }
+    }
+
+    public static int fromAstralCell(char cell) {
+        if (cell >= ASTRAL_ALIAS_BASE && cell < ASTRAL_ALIAS_BASE + MAX_ASTRAL_ALIASES) {
+            return ASTRAL_TO_CODEPOINT[cell - ASTRAL_ALIAS_BASE];
+        }
+        return -1;
+    }
+
+    public static int cellToCodepoint(char cell) {
+        int astral = fromAstralCell(cell);
+        if (astral > 0) return astral;
+        if (cell >= LEGACY_ALIAS_BASE && cell <= LEGACY_ALIAS_END) {
+            return ALIAS_TO_BYTE[cell - LEGACY_ALIAS_BASE];
+        }
+        return cell;
+    }
+
     public static boolean isInternalMarker(int codepoint) {
-        return codepoint >= LEGACY_ALIAS_BASE && codepoint <= CONTINUATION;
+        return (codepoint >= LEGACY_ALIAS_BASE && codepoint <= CONTINUATION)
+            || (codepoint >= ASTRAL_ALIAS_BASE && codepoint < ASTRAL_ALIAS_BASE + MAX_ASTRAL_ALIASES);
     }
 
     public static int terminalOnlyGlyph(int codepoint) {
