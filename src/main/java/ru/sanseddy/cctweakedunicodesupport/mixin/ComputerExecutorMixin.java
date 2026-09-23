@@ -36,10 +36,22 @@ public abstract class ComputerExecutorMixin {
         .addFile("programs/rednet/chat.lua")
         .addFile("programs/shell.lua");
 
+    @Unique
+    private static boolean cc_tweaked_unicode_support$containsOverlay(Mount mount, Mount target) {
+        if (mount == null) return false;
+        if (mount == target) return true;
+        if (mount instanceof RomOverlayMount rom) {
+            return rom.getOverlay() == target
+                || cc_tweaked_unicode_support$containsOverlay(rom.getOverlay(), target)
+                || cc_tweaked_unicode_support$containsOverlay(rom.getBase(), target);
+        }
+        return false;
+    }
+
     @Inject(method = "getRomMount", at = @At("RETURN"), cancellable = true)
     private void cc_tweaked_unicode_support$wrapRomMount(CallbackInfoReturnable<Mount> cir) {
         var original = cir.getReturnValue();
-        if (original != null) {
+        if (original != null && !cc_tweaked_unicode_support$containsOverlay(original, cc_tweaked_unicode_support$overlay)) {
             cir.setReturnValue(new RomOverlayMount(original, cc_tweaked_unicode_support$overlay));
         }
     }
@@ -53,12 +65,10 @@ public abstract class ComputerExecutorMixin {
         index = 2
     )
     private Mount cc_tweaked_unicode_support$wrapFinalRomMount(Mount mount) {
-        if (mount != null) {
-            if (mount instanceof RomOverlayMount romOverlay && romOverlay.getOverlay() == cc_tweaked_unicode_support$overlay) {
-                return mount;
-            }
+        if (mount != null && !cc_tweaked_unicode_support$containsOverlay(mount, cc_tweaked_unicode_support$overlay)) {
             return new RomOverlayMount(mount, cc_tweaked_unicode_support$overlay);
         }
         return mount;
     }
 }
+

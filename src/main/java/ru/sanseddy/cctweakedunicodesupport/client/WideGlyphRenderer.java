@@ -134,6 +134,9 @@ public final class WideGlyphRenderer {
     }
 
     private static String glyph(int codepoint) {
+        if (codepoint < 0 || (codepoint >= 0xD800 && codepoint <= 0xDFFF) || codepoint > Character.MAX_CODE_POINT) {
+            return "\uFFFD";
+        }
         if (codepoint <= Character.MAX_VALUE) {
             var cached = BMP_GLYPHS[codepoint];
             if (cached == null) BMP_GLYPHS[codepoint] = cached = String.valueOf((char) codepoint);
@@ -141,4 +144,5 @@ public final class WideGlyphRenderer {
         }
         return ASTRAL_GLYPHS.computeIfAbsent(codepoint, value -> new String(Character.toChars(value)));
     }
+
 }

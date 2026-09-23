@@ -183,20 +183,11 @@ public final class Utf8 {
                 continue;
             }
 
-            var lead = bytes[i] & 0xFF;
-            var consumed = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-            if (i + consumed > limit) {
-                out[cell] = ' ';
-                i = limit;
-                continue;
-            }
-
-            var codepoint = lead;
-            if (consumed > 1) {
-                codepoint = lead & (0x7F >> consumed);
-                for (var b = i + 1; b < i + consumed; b++) codepoint = codepoint << 6 | bytes[b] & 0x3F;
-            }
-            if (codepoint > 0xFFFF) {
+            var consumed = sequenceLength(bytes, i, limit);
+            var codepoint = codepoint(bytes, i, consumed);
+            if (consumed == 1) {
+                out[cell] = CraftOsCharset.toCell(bytes[i] & 0xFF);
+            } else if (codepoint > 0xFFFF) {
                 out[cell] = CraftOsCharset.toAstralCell(codepoint);
             } else {
                 out[cell] = (char) codepoint;
@@ -205,6 +196,8 @@ public final class Utf8 {
         }
         return i;
     }
+
+
 
     public static void encodePreferLegacy(int codepoint, ByteArrayOutputStream out) {
         if (CraftOsCharset.isInternalMarker(codepoint)) {

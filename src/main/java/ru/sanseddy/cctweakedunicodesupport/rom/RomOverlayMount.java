@@ -1,6 +1,8 @@
 package ru.sanseddy.cctweakedunicodesupport.rom;
 
+import dan200.computercraft.api.filesystem.FileOperationException;
 import dan200.computercraft.api.filesystem.Mount;
+import dan200.computercraft.api.filesystem.MountConstants;
 
 import java.io.IOException;
 import java.nio.channels.SeekableByteChannel;
@@ -38,18 +40,27 @@ public class RomOverlayMount implements Mount {
     @Override
     public boolean isDirectory(String path) throws IOException {
         if (overlay.exists(path)) {
-            if (overlay.isDirectory(path)) return true;
-            return false;
+            return overlay.isDirectory(path);
         }
         return base.exists(path) && base.isDirectory(path);
     }
 
     @Override
     public void list(String path, List<String> contents) throws IOException {
-        var listed = new ArrayList<String>();
+        if (!exists(path)) {
+            throw new FileOperationException(path, MountConstants.NO_SUCH_FILE);
+        }
+        if (!isDirectory(path)) {
+            throw new FileOperationException(path, MountConstants.NOT_A_DIRECTORY);
+        }
 
-        if (base.exists(path) && base.isDirectory(path)) base.list(path, listed);
-        if (overlay.exists(path) && overlay.isDirectory(path)) overlay.list(path, listed);
+        var listed = new ArrayList<String>();
+        if (overlay.exists(path) && overlay.isDirectory(path)) {
+            overlay.list(path, listed);
+        }
+        if (base.exists(path) && base.isDirectory(path)) {
+            base.list(path, listed);
+        }
 
         var seen = new HashSet<String>();
         for (var entry : listed) {
@@ -59,19 +70,35 @@ public class RomOverlayMount implements Mount {
 
     @Override
     public long getSize(String path) throws IOException {
-        if (overlay.exists(path)) return overlay.getSize(path);
-        return base.getSize(path);
+        if (overlay.exists(path)) {
+            return overlay.getSize(path);
+        }
+        if (base.exists(path)) {
+            return base.getSize(path);
+        }
+        throw new FileOperationException(path, MountConstants.NO_SUCH_FILE);
     }
 
     @Override
     public SeekableByteChannel openForRead(String path) throws IOException {
-        if (overlay.exists(path)) return overlay.openForRead(path);
-        return base.openForRead(path);
+        if (overlay.exists(path)) {
+            return overlay.openForRead(path);
+        }
+        if (base.exists(path)) {
+            return base.openForRead(path);
+        }
+        throw new FileOperationException(path, MountConstants.NO_SUCH_FILE);
     }
 
     @Override
     public BasicFileAttributes getAttributes(String path) throws IOException {
-        if (overlay.exists(path)) return overlay.getAttributes(path);
-        return base.getAttributes(path);
+        if (overlay.exists(path)) {
+            return overlay.getAttributes(path);
+        }
+        if (base.exists(path)) {
+            return base.getAttributes(path);
+        }
+        throw new FileOperationException(path, MountConstants.NO_SUCH_FILE);
     }
 }
+

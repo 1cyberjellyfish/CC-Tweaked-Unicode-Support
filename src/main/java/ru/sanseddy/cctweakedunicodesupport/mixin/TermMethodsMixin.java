@@ -33,30 +33,10 @@ public abstract class TermMethodsMixin {
     private void cc_tweaked_unicode_support$blitDecoded(
         ByteBuffer text, ByteBuffer textColour, ByteBuffer backgroundColour, CallbackInfo ci
     ) throws LuaException {
-        var cells = Utf8.decode(Utf8.asByteString(text));
-        var terminal = getTerminal();
-        var fgLen = textColour.remaining();
-        var bgLen = backgroundColour.remaining();
-
-        synchronized (terminal) {
-            var x = terminal.getCursorX();
-            var y = terminal.getCursorY();
-            if (y >= 0 && y < terminal.getHeight()) {
-                var line = terminal.getLine(y);
-                var foreground = terminal.getTextColourLine(y);
-                var background = terminal.getBackgroundColourLine(y);
-                for (var i = 0; i < cells.length(); i++) {
-                    line.setChar(x + i, cells.charAt(i));
-                    char fgChar = fgLen > 0 ? (char) (textColour.get(textColour.position() + Math.max(0, Math.min(i, fgLen - 1))) & 0xFF) : '0';
-                    char bgChar = bgLen > 0 ? (char) (backgroundColour.get(backgroundColour.position() + Math.max(0, Math.min(i, bgLen - 1))) & 0xFF) : 'f';
-                    foreground.setChar(x + i, fgChar);
-                    background.setChar(x + i, bgChar);
-                }
-                terminal.setChanged();
-            }
-
-            terminal.setCursorPos(x + cells.length(), y);
-        }
+        ru.sanseddy.cctweakedunicodesupport.text.TermBlitHelper.blit(getTerminal(), text, textColour, backgroundColour);
         ci.cancel();
     }
+
+
+
 }

@@ -35,9 +35,10 @@ public class NetworkedTerminalMixin {
 
             for (var x = 0; x < width; x++) {
                 var ch = text.charAt(x);
-                var astral = CraftOsCharset.fromAstralCell(ch);
-                Utf8.encode(astral > 0 ? astral : ch, contents);
+                var codepoint = CraftOsCharset.cellToCodepoint(ch);
+                Utf8.encode(codepoint, contents);
             }
+
             for (var x = 0; x < width; x++) {
                 contents.write(Terminal.getColour(backColour.charAt(x), Colour.BLACK) << 4
                     | Terminal.getColour(textColour.charAt(x), Colour.WHITE));
